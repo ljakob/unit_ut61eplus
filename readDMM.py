@@ -8,7 +8,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 dmm = UT16EPLUS()
 
-#dmm.test()
+log.info('name=%s', dmm.getName())
+dmm.sendCommand('lamp')
 m = dmm.takeMeasurement()
 log.info('measurent=%s', m)
 
