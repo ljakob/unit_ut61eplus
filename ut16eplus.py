@@ -1,6 +1,7 @@
 import binascii
 import logging
 import hid
+import decimal
 from glibc import ctypes
 
 log = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ ab . => header
 cd . => header
 10   => number of bytes that follow including 'checksum'
 01   => mode
-30 0 => range
+30 0 => range (character starting at '0')
 20   => digit MSB (can be ' ' or '-') ! number can also be ' OL.  '
 20   => digit
 35 5 => digit
@@ -33,15 +34,16 @@ cd . => header
 03   => sum over all - MSB - sum from 0xab to 0x30
 8d . => sum over all - LSB
 
-
-
-
 """
 
 
 class Measurement:
+
+    # decoced modes
     _MODE = ['ACV', 'ACmV', 'DCV', 'DCmV', 'Hz', '%', 'OHM', 'CONT', 'DIDOE', 'CAP', '°C', '°F', 'DCuA', 'ACuA', 'DCmA', 'ACmA',
              'DCA', 'ACA', 'HFE', 'Live', 'NCV', 'LozV', 'ACA', 'DCA', 'LPF', 'AC/DC', 'LPF', 'AC+DC', 'LPF', 'AC+DC2', 'INRUSH']
+
+    # units based on mode and range
     _UNITS = {'%': {'0': '%'},
               'AC+DC': {'1': 'A'},
               'AC+DC2': {'1': 'A'},
@@ -86,53 +88,182 @@ class Measurement:
               '°C': {'0': '°C', '1': '°C'},
               '°F': {'0': '°F', '1': '°F'}}
 
+    # stings that could mean overload - taken from android app
     _OVERLOAD = set(['.OL', 'O.L', 'OL.', 'OL', '-.OL', '-O.L', '-OL.', '-OL'])
+    
+    # unit exponents
+    _EXPONENTS = {
+        'M':  6, # mega
+        'k':  3, # kilo
+        'm': -3, # milli
+        'u': -6, # mirco
+        'n': -9,  # nano
+    }
+
+    @property
+    def binary(self)->bytes:
+        """ original binary data from DMM """
+        return self._data['binary']
+
+    @property
+    def mode(self)->str:
+        """ mode """
+        return self._data['mode']
+
+    @property
+    def range(self)->str:
+        """ range - internal to device """
+        return self._data['range']
+
+    @property
+    def display(self)->str:
+        """displayed number as string """
+        return self._data['display']
+
+    @property
+    def overload(self)->bool:
+        """ device is in overload condition - like measuring resistance on open leads """
+        return self._data['overload']
+
+    @property
+    def display_decimal(self)->decimal:
+        """ displayed number as decimal - may be decimal.Overflow() in overload condition """
+        return self._data['display_decimal']
+
+    @property
+    def display_unit(self)->str:
+        """ displayed unit including exponent - e.g. mV """
+        return self._data['display_unit']
+
+    @property
+    def unit(self)->str:
+        """ physical unit of the measurement - e.g. V """
+        return self._data['display_unit']
+
+    @property
+    def value(self)->decimal:
+        """ decimal representation - e.g. 200mV => 0.2V """
+        return self._data['decimal']
+    
+    @property
+    def progress(self)->int:
+        """ some progress indicator - unknown meaning """
+        return self._data['progres']
+
+    @property
+    def isMax(self)->bool:
+        """ value is max value """
+        return self._data['max']
+
+    @property
+    def isMin(self)->bool:
+        """ value is max value """
+        return self._data['min']
+
+    @property
+    def isHold(self)->bool:
+        """ DMM is in hold mode """
+        return self._data['hold']
+
+    @property
+    def isRel(self)->bool:
+        """ DMM is in REL mode """
+        return self._data['rel']
+
+    @property
+    def isAuto(self)->bool:
+        """ auto ranging active """
+        return self._data['auto']
+
+    @property
+    def hasBatteryWarning(self)->bool:
+        """ battery warning """
+        return self._data['battery']
+
+    @property
+    def hasHVWarning(self)->bool:
+        """ high voltage warning - > 30 V """
+        return self._data['hvwarning']
+
+    @property
+    def isDC(self)->bool:
+        """ displayed value is DC """
+        return self._data['dc']
+
+    @property
+    def isMaxPeak(self)->bool:
+        """ value is max peak """
+        return self._data['peak_max']
+
+    @property
+    def isMinPeak(self)->bool:
+        """ value is min peak """
+        return self._data['peak_min']
+
+    @property
+    def isBarPol(self)->bool:
+        """ unknown """
+        return self._data['']
+
 
     def __init__(self, b: bytes):
-        self.b = b
-        self.mode = self._MODE[b[0]]
-        self.range = b[1:2].decode('ASCII')
-        self.display = b[2:9].decode('ASCII').strip()
-        self.overload = self.display in self._OVERLOAD
-        if self.overload:
-            self.decimal = None
+        self._data = {}
+        self._data['binary'] = b
+        self._data['mode'] = self._MODE[b[0]]
+        self._data['range'] = b[1:2].decode('ASCII')
+        self._data['display'] = b[2:9].decode('ASCII').replace(' ', '')
+        self._data['overload'] = self._data['display'] in self._OVERLOAD
+        if self._data['overload']:
+            self._data['display_decimal'] = decimal.Overflow()
         else:
-            self.decimal = float(self.display)
-        self.unit = self._UNITS[ self.mode ].get(self.range)
-        self.progres = b[9] * 10 + b[10]
-        self.max = b[11] & 8 > 0
-        self.min = b[11] & 4 > 0
-        self.hold = b[11] & 2 > 0
-        self.rel = b[11] & 1 > 0
-        self.auto = b[12] & 4 == 0
-        self.battery = b[12] & 2 > 0
-        self.hvwarning = b[12] & 1 > 0
-        self.dc = b[13] & 8 > 0
-        self.peak_max = b[13] & 4 > 0
-        self.peak_min = b[13] & 2 > 0
-        self.bar_pol = b[13] & 1 > 0  # meaning not clear
+            self._data['display_decimal'] = decimal.Decimal(self.display)
+            
+        self._data['display_unit'] = self._UNITS[ self._data['mode'] ].get(self._data['range'])
+        
+        self._data['unit'] = self._data['display_unit']
+
+        self._data['decimal'] = self.display_decimal
+        if self._data['unit'][0] in self._EXPONENTS:
+            self._data['decimal'] = self._data['decimal'].rotate(self._EXPONENTS[self.unit[0]])
+            self._data['unit'] = self._data['unit'][1:] # remove first char
+
+        self._data['progres'] = b[9] * 10 + b[10]
+        self._data['max'] = b[11] & 8 > 0
+        self._data['min'] = b[11] & 4 > 0
+        self._data['hold'] = b[11] & 2 > 0
+        self._data['rel'] = b[11] & 1 > 0
+        self._data['auto'] = b[12] & 4 == 0
+        self._data['battery'] = b[12] & 2 > 0
+        self._data['hvwarning'] = b[12] & 1 > 0
+        self._data['dc'] = b[13] & 8 > 0
+        self._data['peak_max'] = b[13] & 4 > 0
+        self._data['peak_min'] = b[13] & 2 > 0
+        self._data['bar_pol'] = b[13] & 1 > 0  # meaning not clear
 
     def __str__(self):
         res = '\n'
         res += f'mode={self.mode}\n'
         res += f'range={self.range}\n'
         res += f'display={self.display}\n'
+        res += f'display_decimal={self.display_decimal}\n'
+        res += f'display_unit={self.display_unit}\n'
         res += f'overload={self.overload}\n'
-        res += f'decimal={self.decimal}\n'
+        res += f'value={self.value}\n'
         res += f'unit={self.unit}\n'
-        res += f'max={self.max}\n'
-        res += f'min={self.min}\n'
-        res += f'hold={self.hold}\n'
-        res += f'rel={self.rel}\n'
-        res += f'auto={self.auto}\n'
-        res += f'battery={self.battery}\n'
-        res += f'hvwarning={self.hvwarning}\n'
-        res += f'dc={self.dc}\n'
-        res += f'peak_max={self.peak_max}\n'
-        res += f'peak_min={self.peak_min}\n'
+        res += f'isMax={self.isMax}\n'
+        res += f'ismin={self.isMin}\n'
+        res += f'isHold={self.isHold}\n'
+        res += f'isRel={self.isRel}\n'
+        res += f'isAuto={self.isAuto}\n'
+        res += f'hasBatteryWarning={self.hasBatteryWarning}\n'
+        res += f'hashasHVWarning={self.hasHVWarning}\n'
+        res += f'isDC={self.isDC}\n'
+        res += f'isMaxPeak={self.isMaxPeak}\n'
+        res += f'isMinPeak={self.isMinPeak}\n'
         return res
 
-        for b in self.b:
+        # pylint: disable=unreachable
+        for b in self.binary:
             l = '{:02x} {}\n'.format(b, chr(b))
             res += l
         return res
@@ -162,6 +293,7 @@ class UT16EPLUS:
     }
 
     def __init__(self):
+        """open device"""
         self.dev = hid.Device(vid=self.CP2110_VID, pid=self.CP2110_PID)
         #self.dev.nonblocking = 1
         self._send_feature_report([0x41, 0x01])  # enable uart
@@ -219,12 +351,14 @@ class UT16EPLUS:
 
     def getName(self):
         # pylint: disable=unused-variable
+        """get name of multimeter"""
         self._write(self._SEQUENCE_GET_NAME)
         unknown = self._readResponse()
         name = self._readResponse()
         return name.decode('ASCII')
 
     def takeMeasurement(self):
+        """read measurement from screen"""
         self._write(self._SEQUENCE_SEND_DATA)
         b = self._readResponse()
         if b is None:
@@ -232,6 +366,7 @@ class UT16EPLUS:
         return Measurement(b)
 
     def sendCommand(self, cmd)->None:
+        """send command to device"""
         if cmd in self._COMMANDS:
             cmd = self._COMMANDS[cmd]
         if not type(cmd) is int:
@@ -247,7 +382,6 @@ class UT16EPLUS:
         self._write(seq)
         # pylint: disable=unused-variable
         unknown = self._readResponse()
-
 
     def _test(self):
         self._write(self._SEQUENCE_GET_NAME)
