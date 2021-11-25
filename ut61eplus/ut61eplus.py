@@ -39,7 +39,7 @@ cd . => header
 
 class Measurement:
 
-    # decoced modes
+    # decoded modes
     _MODE = ['ACV', 'ACmV', 'DCV', 'DCmV', 'Hz', '%', 'OHM', 'CONT', 'DIDOE', 'CAP', '°C', '°F', 'DCuA', 'ACuA', 'DCmA', 'ACmA',
              'DCA', 'ACA', 'HFE', 'Live', 'NCV', 'LozV', 'ACA', 'DCA', 'LPF', 'AC/DC', 'LPF', 'AC+DC', 'LPF', 'AC+DC2', 'INRUSH']
 
@@ -269,7 +269,7 @@ class Measurement:
         return res
 
 
-class UT16EPLUS:
+class UT61EPLUS:
 
     CP2110_VID = 0x10c4
     CP2110_PID = 0xEA80
