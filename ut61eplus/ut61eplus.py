@@ -86,10 +86,15 @@ class Measurement:
                       '5': 'MΩ',
                       '6': 'MΩ'},
               '°C': {'0': '°C', '1': '°C'},
-              '°F': {'0': '°F', '1': '°F'}}
+              '°F': {'0': '°F', '1': '°F'},
+              'HFE': {'0': 'B'},
+              'NCV': {'0': 'NCV'}}
 
-    # stings that could mean overload - taken from android app
+    # strings that could mean overload - taken from android app
     _OVERLOAD = set(['.OL', 'O.L', 'OL.', 'OL', '-.OL', '-O.L', '-OL.', '-OL'])
+    
+    # strings that Indicate level of voltage detected >=50Vrms (50-60Hz)
+    _NCV = set(['EF','-','--','---','----','-----'])
     
     # unit exponents
     _EXPONENTS = {
@@ -213,8 +218,19 @@ class Measurement:
         self._data['range'] = b[1:2].decode('ASCII')
         self._data['display'] = b[2:9].decode('ASCII').replace(' ', '')
         self._data['overload'] = self._data['display'] in self._OVERLOAD
+        self._data['ncv'] = self._data['display'] in self._NCV
         if self._data['overload']:
             self._data['display_decimal'] = decimal.Overflow()
+        elif self._data['ncv']:
+            switch={
+                'EF': 0,
+                '-': 1,
+                '--': 2,
+                '---': 3,
+                '----': 4,
+                '-----': 5
+            }
+            self._data['display_decimal'] = switch.get(self._data['display'],-1)
         else:
             self._data['display_decimal'] = decimal.Decimal(self.display)
             
@@ -223,7 +239,7 @@ class Measurement:
         self._data['unit'] = self._data['display_unit']
 
         self._data['decimal'] = self.display_decimal
-        if self._data['unit'][0] in self._EXPONENTS:
+        if self._data['unit'][0] in self._EXPONENTS and not self._data['overload']:
             self._data['decimal'] = self._data['decimal'].rotate(self._EXPONENTS[self.unit[0]])
             self._data['unit'] = self._data['unit'][1:] # remove first char
 
