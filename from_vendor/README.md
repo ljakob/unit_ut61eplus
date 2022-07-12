@@ -1,1 +1,1 @@
-this files are from the decompiled android app
+these files are from the decompiled android app - licence is not GPL :)
