@@ -103,7 +103,7 @@ def main():
 
     while True:
         try:
-            mqtt_client.loop_forever()
+            mqtt_client.loop()
         except Exception:
             log.exception('error in mqtt loop')
             time.sleep(10)           
