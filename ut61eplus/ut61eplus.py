@@ -35,7 +35,10 @@ cd . => header
 8d . => sum over all - LSB
 
 """
-
+class SERIAL_NUMBERS:
+    A = '006C2895'
+    B = '006C3EE8'
+    C = '006C2FB6'
 
 class Measurement:
 
@@ -308,9 +311,14 @@ class UT61EPLUS:
         'not_peak': 78,
     }
 
-    def __init__(self):
+    def __init__(self, serial = None):
         """open device"""
-        self.dev = hid.Device(vid=self.CP2110_VID, pid=self.CP2110_PID)
+        if not serial == None:
+            print(serial)
+            print(type(serial))
+            self.dev = hid.Device(vid=self.CP2110_VID, pid=self.CP2110_PID, serial = serial)
+        else:
+            self.dev = hid.Device(vid=self.CP2110_VID, pid=self.CP2110_PID)
         #self.dev.nonblocking = 1
         self._send_feature_report([0x41, 0x01])  # enable uart
         self._send_feature_report([0x50, 0x00, 0x00, 0x25, 0x80, 0x00, 0x00, 0x03, 0x00, 0x00])  # 9600 8N1 - from USB trace
@@ -398,6 +406,15 @@ class UT61EPLUS:
         self._write(seq)
         # pylint: disable=unused-variable
         unknown = self._readResponse()
+        
+    def listDevices(self):
+        for device_dict in hid.enumerate():
+            keys = list(device_dict.keys())
+            keys.sort()
+            if device_dict['vendor_id'] == self.CP2110_VID:
+                for key in keys:
+                    print("%s : %s" % (key, device_dict[key]))
+                print()
 
     def _test(self):
         self._write(self._SEQUENCE_GET_NAME)
