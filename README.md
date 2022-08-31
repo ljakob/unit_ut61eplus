@@ -13,7 +13,7 @@ It should work also for other models:
 but for this the unit conversion has to be adjusted (see `from_vendor/*.json`)
 
 ## Status
-> Working
+> Working with Linux, patches/documentation for Windows are welcome (probably only docs needed to setup the HID library correctly)
 
 
 ## Example output (see `readDMM.py`)
