@@ -1,8 +1,7 @@
 import binascii
 import logging
-import hid
+import hid # https://github.com/trezor/cython-hidapi https://trezor.github.io/cython-hidapi/api.html
 import decimal
-from glibc import ctypes
 
 log = logging.getLogger(__name__)
 
@@ -310,24 +309,20 @@ class UT61EPLUS:
 
     def __init__(self):
         """open device"""
-        self.dev = hid.Device(vid=self.CP2110_VID, pid=self.CP2110_PID)
+        self.dev = hid.device()
+        self.dev.open(self.CP2110_VID, self.CP2110_PID)
+        log.debug('device is open')
         #self.dev.nonblocking = 1
-        self._send_feature_report([0x41, 0x01])  # enable uart
-        self._send_feature_report([0x50, 0x00, 0x00, 0x25, 0x80, 0x00, 0x00, 0x03, 0x00, 0x00])  # 9600 8N1 - from USB trace
-        self._send_feature_report([0x43, 0x02])  # purge both fifos
+        self.dev.send_feature_report([0x41, 0x01])  # enable uart
+        self.dev.send_feature_report([0x50, 0x00, 0x00, 0x25, 0x80, 0x00, 0x00, 0x03, 0x00, 0x00])  # 9600 8N1 - from USB trace
+        self.dev.send_feature_report([0x43, 0x02])  # purge both fifos
+        log.debug('feature requests sent')
 
     def _write(self, b: bytes):
-        l = len(b)
-        buf = ctypes.create_string_buffer(1 + l)
-        buf[0] = l
-        buf[1:] = b[0:]
+        buf = []
+        buf.append(len(b))
+        buf += b
         self.dev.write(buf)
-
-    def _send_feature_report(self, report: bytes):
-        l = len(report)
-        buf = ctypes.create_string_buffer(l)
-        buf[0:l] = report[0:l]
-        self.dev.send_feature_report(buf)
 
     def _readResponse(self) -> bytes:
         # pylint: disable=unsupported-assignment-operation,unsubscriptable-object

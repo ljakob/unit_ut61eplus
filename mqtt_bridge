@@ -21,11 +21,9 @@ class MyClient(mqtt.Client):
         self._last_data : datetime = None
         super().__init__(mid)
 
-    def loop(self, timeout=1.0, max_packets=1):
-        log.debug('loop timeout=%f', timeout)
-        if cmdline.interval < 5:
-            timeout = 0.3
-        res = super().loop(timeout, max_packets)
+    def loop_misc(self):
+        log.debug('loop')
+        res = super().loop_misc()
 
         now = datetime.datetime.now()
         if self._last_data is None:
@@ -103,7 +101,11 @@ def main():
 
     while True:
         try:
-            mqtt_client.loop_forever()
+            timeout = 1
+            if cmdline.interval < 5:
+                timeout = 0.3
+
+            mqtt_client.loop_forever(timeout=timeout)
         except Exception:
             log.exception('error in mqtt loop')
             time.sleep(10)           
