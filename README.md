@@ -35,3 +35,6 @@ dc=True
 peak_max=False
 peak_min=False
 ```
+
+# Source
+https://github.com/tobiasfalk/UIN-T-USB-Reader
